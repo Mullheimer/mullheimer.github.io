@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eenvoudige Autocue - iPad Vriendelijk</title>
+  <style>
+    body {
+      background: #111;
+      color: #fff;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 10px;
+      overflow-x: hidden;
+    }
+    #setup {
+      text-align: center;
+      padding: 20px;
+    }
+    #textInput {
+      width: 90%;
+      height: 300px;
+      margin: 20px auto;
+      padding: 15px;
+      font-size: 1.2em;
+      border-radius: 10px;
+      border: 2px solid #444;
+      background: #222;
+      color: white;
+      resize: vertical;
+    }
+    #controls {
+      text-align: center;
+      background: rgba(0,0,0,0.8);
+      padding: 15px;
+      border-radius: 10px;
+      margin: 10px;
+      position: sticky;
+      top: 10px;
+      z-index: 10;
+    }
+    #teleprompter {
+      padding: 20px;
+      min-height: 70vh;
+    }
+    #text {
+      font-size: 2.5em;
+      line-height: 1.5;
+      text-align: center;
+      white-space: pre-line;
+      user-select: none;
+      max-width: 90%;
+      margin: 0 auto;
+    }
+    button {
+      font-size: 1.2em;
+      padding: 12px 20px;
+      margin: 5px;
+      border: none;
+      border-radius: 8px;
+      background: #ff6b35;
+      color: white;
+      cursor: pointer;
+      touch-action: manipulation;
+      min-width: 80px;
+    }
+    button:hover, button:active {
+      background: #e55a2b;
+    }
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+    input[type=range] {
+      width: 120px;
+      margin: 0 10px;
+      vertical-align: middle;
+    }
+    label {
+      margin: 0 10px;
+      font-size: 1em;
+    }
+    .hidden { display: none; }
+    
+    /* iPad specifieke aanpassingen */
+    @media (max-width: 1024px) {
+      #text { font-size: 2.2em; }
+      button { font-size: 1.1em; padding: 15px 25px; }
+      #controls { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="setup">
+    <h2>📱 iPad-vriendelijke Autocue</h2>
+    <textarea id="textInput" placeholder="Plak hier je speech tekst...
+
+Bijvoorbeeld:
+Goedemiddag allemaal,
+
+Op kamers gaan op je 16e of 17e… dat is een avontuur.
+
+Voor de één betekent het vrijheid. Voor de ander betekent het ontdekken dat de wasmachine níet vanzelf draait."></textarea>
+    <br>
+    <button id="startBtn" onclick="startTeleprompter()">Start Autocue</button>
+  </div>
+
+  <div id="teleprompterView" class="hidden">
+    <div id="controls">
+      <button id="playPause">▶️ Start</button>
+      <label>Snelheid: <input id="speed" type="range" min="50" max="250" value="130"> <span id="wpm">130</span> WPM</label>
+      <label>Pauze: <input id="pauseDelay" type="range" min="0" max="5000" value="2000" step="500"> <span id="pauseMs">2.0</span>s</label>
+      <button id="reset">🔄 Reset</button>
+      <button id="backToEdit">✏️ Bewerken</button>
+    </div>
+    <div id="teleprompter">
+      <div id="text"></div>
+    </div>
+  </div>
+
+  <script>
+    let words = [];
+    let currentWord = 0;
+    let interval = null;
+    let isPlaying = false;
+    let wpm = 130;
+    let pauseDelay = 2000;
+    let isPausing = false;
+
+    const elements = {
+      setup: document.getElementById('setup'),
+      teleprompterView: document.getElementById('teleprompterView'),
+      textInput: document.getElementById('textInput'),
+      textDiv: document.getElementById('text'),
+      playPauseBtn: document.getElementById('playPause'),
+      speedInput: document.getElementById('speed'),
+      wpmSpan: document.getElementById('wpm'),
+      pauseDelayInput: document.getElementById('pauseDelay'),
+      pauseMsSpan: document.getElementById('pauseMs'),
+      resetBtn: document.getElementById('reset'),
+      backToEditBtn: document.getElementById('backToEdit')
+    };
+
+    function startTeleprompter() {
+      const text = elements.textInput.value.trim();
+      if (!text) {
+        alert('Voer eerst je tekst in!');
+        return;
+      }
+      
+      elements.setup.classList.add('hidden');
+      elements.teleprompterView.classList.remove('hidden');
+      
+      // Splitsen in woorden
+      const lines = text.split(/\n\s*\n/).filter(l => l.trim().length > 0);
+      words = [];
+      lines.forEach((line, lineIdx) => {
+        const lineWords = line.trim().split(/\s+/);
+        lineWords.forEach((word, wordIdx) => {
+          words.push({
+            text: word,
+            isParagraphEnd: wordIdx === lineWords.length - 1
+          });
+        });
+      });
+      
+      currentWord = 0;
+      render();
+    }
+
+    function render() {
+      let html = '';
+      words.forEach((word, idx) => {
+        let style = '';
+        if (idx < currentWord) {
+          style = 'opacity: 0.4; color: #888;';
+        } else if (idx === currentWord) {
+          style = 'background: #ff6b35; color: #fff; padding: 4px 8px; border-radius: 4px; opacity: 1;';
+        } else {
+          style = 'opacity: 0.8; color: #fff;';
+        }
+        
+        html += `<span style="${style}">${word.text}</span> `;
+        
+        if (word.isParagraphEnd && idx < words.length - 1) {
+          html += '<br><br>';
+        }
+      });
+      
+      elements.textDiv.innerHTML = html;
+      
+      // Scroll naar huidige woord
+      const spans = elements.textDiv.querySelectorAll('span');
+      if (spans[currentWord]) {
+        spans[currentWord].scrollIntoView({behavior: 'smooth', block: 'center'});
+      }
+    }
+
+    function nextWord() {
+      if (currentWord < words.length - 1) {
+        currentWord++;
+        render();
+        
+        // Pauze na alinea
+        if (words[currentWord - 1].isParagraphEnd && pauseDelay > 0 && currentWord < words.length) {
+          isPausing = true;
+          clearInterval(interval);
+          setTimeout(() => {
+            if (isPlaying) {
+              isPausing = false;
+              let msPerWord = 60000 / wmp;
+              interval = setInterval(nextWord, msPerWord);
+            }
+          }, pauseDelay);
+        }
+      } else {
+        pause();
+      }
+    }
+
+    function play() {
+      if (words.length === 0) return;
+      isPlaying = true;
+      elements.playPauseBtn.textContent = '⏸️ Pauze';
+      let msPerWord = 60000 / wpm;
+      interval = setInterval(nextWord, msPerWord);
+    }
+
+    function pause() {
+      isPlaying = false;
+      elements.playPauseBtn.textContent = '▶️ Start';
+      clearInterval(interval);
+    }
+
+    // Event listeners
+    elements.playPauseBtn.onclick = function() {
+      if (isPlaying) pause(); else play();
+    };
+
+    elements.speedInput.oninput = function() {
+      wpm = parseInt(elements.speedInput.value);
+      elements.wpmSpan.textContent = wpm;
+      if (isPlaying && !isPausing) {
+        clearInterval(interval);
+        let msPerWord = 60000 / wpm;
+        interval = setInterval(nextWord, msPerWord);
+      }
+    };
+
+    elements.pauseDelayInput.oninput = function() {
+      pauseDelay = parseInt(elements.pauseDelayInput.value);
+      elements.pauseMsSpan.textContent = (pauseDelay / 1000).toFixed(1);
+    };
+
+    elements.resetBtn.onclick = function() {
+      pause();
+      currentWord = 0;
+      render();
+    };
+
+    elements.backToEditBtn.onclick = function() {
+      pause();
+      elements.teleprompterView.classList.add('hidden');
+      elements.setup.classList.remove('hidden');
+    };
+
+    // Fix voor de variabele naam
+    function nextWord() {
+      if (currentWord < words.length - 1) {
+        currentWord++;
+        render();
+        
+        if (words[currentWord - 1].isParagraphEnd && pauseDelay > 0 && currentWord < words.length) {
+          isPausing = true;
+          clearInterval(interval);
+          setTimeout(() => {
+            if (isPlaying) {
+              isPausing = false;
+              let msPerWord = 60000 / wpm; // wmp -> wpm fix
+              interval = setInterval(nextWord, msPerWord);
+            }
+          }, pauseDelay);
+        }
+      } else {
+        pause();
+      }
+    }
+  </script>
+</body>
+</html>
