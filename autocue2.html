@@ -122,7 +122,8 @@ Voor de één betekent het vrijheid. Voor de ander betekent het ontdekken dat de
   <script>
     let words = [];
     let currentWord = 0;
-    let interval = null;
+  let interval = null;
+  let timeoutId = null;
     let isPlaying = false;
     let wpm = 130;
     let pauseDelay = 2000;
@@ -207,21 +208,28 @@ Voor de één betekent het vrijheid. Voor de ander betekent het ontdekken dat de
     }
 
     function nextWord() {
+      // clear any pending timeout to avoid duplicates
+      if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+
       if (currentWord < words.length - 1) {
         currentWord++;
         render();
-        
+
         // Pauze na alinea
         if (words[currentWord - 1].isParagraphEnd && pauseDelay > 0 && currentWord < words.length) {
           isPausing = true;
-          clearInterval(interval);
-          setTimeout(() => {
+          // schedule resume after paragraph pause
+          timeoutId = setTimeout(() => {
             if (isPlaying) {
               isPausing = false;
-              let msPerWord = 60000 / wmp;
-              interval = setInterval(nextWord, msPerWord);
+              const msPerWord = 60000 / wpm;
+              timeoutId = setTimeout(nextWord, msPerWord);
             }
           }, pauseDelay);
+        } else {
+          // schedule next word normally
+          const msPerWord = 60000 / wpm;
+          timeoutId = setTimeout(nextWord, msPerWord);
         }
       } else {
         pause();
@@ -232,14 +240,16 @@ Voor de één betekent het vrijheid. Voor de ander betekent het ontdekken dat de
       if (words.length === 0) return;
       isPlaying = true;
       elements.playPauseBtn.textContent = '⏸️ Pauze';
-      let msPerWord = 60000 / wpm;
-      interval = setInterval(nextWord, msPerWord);
+      const msPerWord = 60000 / wpm;
+      if (timeoutId) { clearTimeout(timeoutId); }
+      timeoutId = setTimeout(nextWord, msPerWord);
     }
 
     function pause() {
       isPlaying = false;
       elements.playPauseBtn.textContent = '▶️ Start';
-      clearInterval(interval);
+      if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+      // keep isPausing as-is; on resume play() will start scheduling again
     }
 
     // Event listeners
@@ -252,9 +262,9 @@ Voor de één betekent het vrijheid. Voor de ander betekent het ontdekken dat de
       elements.wpmSpan.textContent = wpm;
       saveSettings();
       if (isPlaying && !isPausing) {
-        clearInterval(interval);
-        let msPerWord = 60000 / wpm;
-        interval = setInterval(nextWord, msPerWord);
+        if (timeoutId) { clearTimeout(timeoutId); }
+        const msPerWord = 60000 / wpm;
+        timeoutId = setTimeout(nextWord, msPerWord);
       }
     };
 
